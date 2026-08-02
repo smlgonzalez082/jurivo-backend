@@ -98,8 +98,17 @@ membership comes from this database, never from a token claim.
 ## Local development
 
 ```bash
+./scripts/start-local.sh          # PostgreSQL + the API; takes a profile arg, defaults to dev
+```
+
+It frees port 8080 from a previous run — but only if a JVM holds it. Anything else is reported
+and left alone, because killing an unrelated process on a common port is a nasty surprise.
+
+Or drive it yourself:
+
+```bash
 docker compose up -d postgres     # PostgreSQL 16 on :5442
-./gradlew bootRun                 # or ./scripts/start-local.sh
+./gradlew bootRun
 ```
 
 GraphiQL is at http://localhost:8080/graphiql (dev profile only). The endpoint still requires a

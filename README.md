@@ -7,6 +7,16 @@ Security, GraphQL, and Amazon Cognito authentication.
 
 ```bash
 cp .env.example .env.local     # fill in your Cognito values (optional for a first run)
+./scripts/start-local.sh       # PostgreSQL + the API, with a URL summary when it's up
+```
+
+The script starts PostgreSQL, waits until it genuinely accepts connections, frees port 8080 if a
+previous run is still holding it, and prints the local URLs once the application reports healthy.
+Pass a profile as the first argument (`./scripts/start-local.sh prod`); it defaults to `dev`.
+
+If you would rather drive it yourself:
+
+```bash
 docker compose up -d postgres  # PostgreSQL 16 on :5442
 ./gradlew bootRun              # http://localhost:8080
 ```
