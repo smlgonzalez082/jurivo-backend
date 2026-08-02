@@ -1,0 +1,92 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+# A newer push to a PR supersedes the older run and frees the runner. Pushes to a trunk branch
+# are never cancelled — they may be mid-deploy.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  JAVA_VERSION: '21'
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: ./gradlew test --no-daemon
+
+      # Runs a real PostgreSQL via Testcontainers. This is where the Row-Level Security policies
+      # are actually exercised — the unit suite cannot tell a working policy from a missing one.
+      - name: Integration tests
+        run: ./gradlew integrationTest --no-daemon
+
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/reports/tests/
+          retention-days: 7
+
+  publish:
+    name: Build and push image
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # OIDC rather than long-lived keys: the role is created by jurivo-cdk's GithubOidcStack
+      # and trusts only this repository.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Jib pushes straight to ECR — there is no Dockerfile and no local Docker daemon in play.
+      # The image tag is what the ECR-push EventBridge rule watches to trigger a deployment.
+      - name: Build and push with Jib
+        run: |
+          ./gradlew jib --no-daemon \
+            -Djib.to.image="${{ steps.ecr.outputs.registry }}/jurivo/jurivo-backend:${{ github.ref_name == 'main' && 'main' || 'develop' }}" \
+            -Djib.to.tags="${{ github.sha }}" \
+            -Djib.container.environment=GIT_SHA=${{ github.sha }}

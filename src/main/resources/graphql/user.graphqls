@@ -1,0 +1,25 @@
+# The authenticated caller.
+
+"""
+Everything the frontend needs to render for the current user, resolved once by the backend.
+
+The frontend does not compute roles, derive permissions, or decide what a user may do — it
+reads this and renders accordingly. Any check it performs is presentation, mirroring a decision
+already made here (Engineering Principle 14).
+"""
+type CurrentUser {
+    id: UUID!
+    email: String!
+    fullName: String
+
+    "Home organization. Null for a platform operator."
+    organizationId: UUID
+
+    roles: [String!]!
+
+    "Resolved permission codes (RESOURCE:ACTION) across every role held."
+    permissions: [String!]!
+
+    "Every organization the caller may act in."
+    organizations: [Organization!]!
+}

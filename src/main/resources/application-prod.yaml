@@ -1,0 +1,17 @@
+# Deployed environments.
+#
+# Every value here comes from the environment, injected by jurivo-cdk from configuration or
+# AWS Secrets Manager. Nothing sensitive is committed, and nothing has a fallback: a missing
+# variable fails startup rather than silently running with a development default.
+spring:
+  graphql:
+    graphiql:
+      enabled: false
+    schema:
+      introspection:
+        enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.jurivo.backend: INFO

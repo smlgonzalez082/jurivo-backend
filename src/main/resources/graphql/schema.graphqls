@@ -1,0 +1,30 @@
+# Root schema.
+#
+# One file declares the roots and the shared scalars; every domain adds its own types in its
+# own file. Spring GraphQL merges them, so a new module never edits this file except to add a
+# root field, which keeps the merge conflicts proportional to the actual coupling.
+
+scalar UUID
+
+# UTC instant, ISO 8601 with offset. Every timestamp crossing this boundary uses it — there is
+# no second timestamp representation in the API, and local time is a display concern only.
+scalar DateTime
+
+type Query {
+    "The authenticated caller, with their resolved roles, permissions, and organizations."
+    me: CurrentUser!
+
+    "Every organization the caller can see. Scope is enforced by Row-Level Security."
+    organizations: [Organization!]!
+
+    "One organization by id, or null when it does not exist or is out of scope."
+    organization(id: UUID!): Organization
+}
+
+type Mutation {
+    "Creates a new tenant. Platform operation — requires ORGANIZATIONS:CREATE."
+    createOrganization(input: CreateOrganizationInput!): Organization!
+
+    "Moves an organization to a new lifecycle state. Illegal transitions are rejected."
+    changeOrganizationStatus(id: UUID!, status: OrganizationStatus!): Organization!
+}

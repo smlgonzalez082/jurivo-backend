@@ -1,0 +1,32 @@
+# The tenant.
+
+"""
+Lifecycle state. Mirrors com.jurivo.backend.module.organization.model.OrganizationStatus and the
+organizations_status_check constraint in migration V1 — one concept, three declarations that must
+change together.
+"""
+enum OrganizationStatus {
+    ACTIVE
+    SUSPENDED
+    CLOSED
+}
+
+type Organization {
+    id: UUID!
+    name: String!
+    slug: String!
+    status: OrganizationStatus!
+
+    "Parent organization, when this one belongs to a larger group."
+    parentId: UUID
+
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+input CreateOrganizationInput {
+    name: String!
+
+    "Lowercase alphanumeric with internal hyphens. Unique across the platform."
+    slug: String!
+}

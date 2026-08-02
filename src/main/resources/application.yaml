@@ -1,0 +1,97 @@
+server:
+  port: 8080
+  # Stop accepting new connections on SIGTERM but let in-flight requests finish. The default
+  # (immediate) severs live requests on every deploy.
+  shutdown: graceful
+
+spring:
+  application:
+    name: jurivo-backend
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+  # Virtual threads. This is what makes blocking, readable code acceptable at this service's
+  # concurrency: a request that waits on the database parks its virtual thread instead of
+  # pinning a platform one, so the thread pool stops being the ceiling.
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5442/jurivo_dev}
+    username: ${DB_USER:jurivo}
+    password: ${DB_PASSWORD:jurivo_dev}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      # Overridable because it interacts with Aurora Serverless v2 auto-pause: a cluster with a
+      # zero-ACU floor only pauses when nothing is holding a connection, so an idle pool would
+      # keep a development database awake — and billed — around the clock. jurivo-cdk sets
+      # DB_MIN_IDLE=0 in those environments; locally, keeping a couple warm is the better trade.
+      minimum-idle: ${DB_MIN_IDLE:2}
+      idle-timeout: 300000
+      connection-timeout: 10000
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/public
+    # Migrations are immutable once applied. Out-of-order application is disabled so a branch
+    # that lands a lower number after a higher one fails loudly instead of silently skipping.
+    out-of-order: false
+
+  graphql:
+    path: /graphql
+    schema:
+      # Introspection is off by default: it publishes the entire API surface, including fields
+      # a client has no permission to read, to anyone who can reach the endpoint.
+      introspection:
+        enabled: ${GRAPHQL_INTROSPECTION_ENABLED:false}
+    graphiql:
+      enabled: ${GRAPHQL_GRAPHIQL_ENABLED:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+app:
+  git-sha: ${GIT_SHA:dev}
+
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+  # Amazon Cognito. There are no defaults here on purpose: a wrong issuer does not fail, it
+  # rejects every token, and a default would let a misconfigured deployment start and then
+  # refuse all traffic. Missing configuration must break startup, loudly.
+  cognito:
+    issuer-uri: ${COGNITO_ISSUER_URI}
+    # Comma-separated app client ids this API accepts (the `client_id` claim on an access
+    # token — Cognito access tokens carry no `aud`; see CognitoAccessTokenValidator).
+    client-ids: ${COGNITO_CLIENT_IDS}
+    user-pool-id: ${COGNITO_USER_POOL_ID:}
+    region: ${COGNITO_REGION:${AWS_REGION:}}
+
+  auth:
+    # Create a Jurivo user row the first time a Cognito identity signs in. The new user gets
+    # no organization and no roles — they can authenticate and see nothing until granted.
+    auto-provision-users: ${AUTH_AUTO_PROVISION:true}
+
+  rate-limit:
+    requests-per-minute: ${RATE_LIMIT_RPM:300}
+
+  graphiql:
+    enabled: ${GRAPHQL_GRAPHIQL_ENABLED:false}
+
+logging:
+  level:
+    root: INFO
+    com.jurivo.backend: ${LOG_LEVEL_APP:INFO}

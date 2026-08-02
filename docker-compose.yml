@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jurivo-postgres
+    environment:
+      POSTGRES_DB: jurivo_dev
+      POSTGRES_USER: jurivo
+      POSTGRES_PASSWORD: jurivo_dev
+    ports:
+      # 5442 rather than 5432 so this never collides with another local Postgres.
+      - "5442:5432"
+    volumes:
+      - jurivo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jurivo -d jurivo_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  jurivo_postgres_data:
