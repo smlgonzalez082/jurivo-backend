@@ -1,0 +1,131 @@
+# User and access management.
+
+"""
+Lifecycle state. Mirrors com.jurivo.backend.module.user.model.UserStatus and the
+users_status_check constraint in migration V1.
+"""
+enum UserStatus {
+    ACTIVE
+    SUSPENDED
+    DEACTIVATED
+}
+
+type User {
+    id: UUID!
+    email: String!
+    fullName: String
+    status: UserStatus!
+    organizationId: UUID
+    lastLoginAt: DateTime
+    createdAt: DateTime!
+
+    "Roles granted to this user, system and custom."
+    roles: [Role!]!
+
+    """
+    Live account state from Cognito. Null when the identity provider is unreachable or has no
+    account for this user — read on demand rather than mirrored into the database, because two
+    copies of an account's enabled flag diverge the moment anyone touches the AWS console.
+    """
+    account: AccountState
+}
+
+type AccountState {
+    enabled: Boolean!
+    "Cognito's own status, e.g. CONFIRMED or FORCE_CHANGE_PASSWORD (invitation not yet accepted)."
+    status: String!
+    mfaEnabled: Boolean!
+    emailVerified: Boolean!
+}
+
+type Role {
+    id: UUID!
+    name: String!
+    description: String
+    level: Int!
+
+    "Platform-owned and immutable. Only system roles satisfy a role check or grant tenant bypass."
+    isSystem: Boolean!
+
+    "Owning organization. Null for a platform role."
+    organizationId: UUID
+
+    permissions: [Permission!]!
+}
+
+type Permission {
+    id: UUID!
+    "RESOURCE:ACTION, e.g. USERS:INVITE."
+    code: String!
+    description: String
+}
+
+input InviteUserInput {
+    email: String!
+    fullName: String
+    organizationId: UUID!
+    roleIds: [UUID!]
+}
+
+input CreateRoleInput {
+    name: String!
+    description: String
+    organizationId: UUID!
+    permissionIds: [UUID!]
+}
+
+input UpdateRoleInput {
+    name: String!
+    description: String
+}
+
+extend type Query {
+    "Users the caller can see. Scope is enforced by Row-Level Security."
+    users: [User!]!
+    user(id: UUID!): User
+
+    "Every role the caller can see: the platform's, plus their own organizations'."
+    roles: [Role!]!
+    "Roles assignable within one organization."
+    assignableRoles(organizationId: UUID!): [Role!]!
+    role(id: UUID!): Role
+
+    "The permission catalogue. Fixed by the application — permissions are not created at runtime."
+    permissions: [Permission!]!
+}
+
+extend type Mutation {
+    "Creates an account and sends the identity provider's invitation email."
+    inviteUser(input: InviteUserInput!): User!
+    "Re-sends the invitation. Only meaningful while it is unaccepted."
+    resendUserInvitation(userId: UUID!): Boolean!
+
+    updateUserProfile(userId: UUID!, fullName: String!): User!
+    changeUserStatus(userId: UUID!, status: UserStatus!): User!
+
+    """
+    Asks the identity provider to email a password-reset code. Jurivo never sees, generates, or
+    transmits the password — which is why no mutation returns one.
+    """
+    sendPasswordReset(userId: UUID!): Boolean!
+
+    "Changes the caller's own password, authorised by their access token rather than admin rights."
+    changeMyPassword(currentPassword: String!, newPassword: String!): Boolean!
+
+    """
+    Permanently deletes a user. Irreversible.
+
+    Requires the user to already be DEACTIVATED, the caller to be a platform operator, and
+    confirmationEmail to match the user's address exactly.
+    """
+    deleteUserPermanently(userId: UUID!, confirmationEmail: String!): Boolean!
+
+    assignRole(userId: UUID!, roleId: UUID!, organizationId: UUID!): User!
+    revokeRole(userId: UUID!, roleId: UUID!, organizationId: UUID!): User!
+
+    createRole(input: CreateRoleInput!): Role!
+    updateRole(roleId: UUID!, input: UpdateRoleInput!): Role!
+    "Replaces the role's permissions with exactly this set."
+    setRolePermissions(roleId: UUID!, permissionIds: [UUID!]!): Role!
+    deleteRole(roleId: UUID!): Boolean!
+}

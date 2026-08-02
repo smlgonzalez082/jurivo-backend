@@ -15,6 +15,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.UUID;
 
@@ -107,14 +108,49 @@ public class AuthorizationAspect {
         }
     }
 
+    /**
+     * Finds the target organization id among the method's arguments.
+     *
+     * <p>Two shapes, because GraphQL mutations use both: a plain {@code UUID organizationId}
+     * parameter, and an input record that carries the id as a component. Supporting only the
+     * first would make the annotation useless on every mutation taking an input object — and
+     * since the aspect fails closed, it would not merely skip the check, it would reject every
+     * call to those mutations.
+     */
     private UUID resolveOrganizationArgument(MethodSignature signature, Object[] args, String parameterName) {
         String[] names = signature.getParameterNames();
-        if (names == null) {
+        if (names != null) {
+            for (int i = 0; i < names.length && i < args.length; i++) {
+                if (parameterName.equals(names[i]) && args[i] instanceof UUID uuid) {
+                    return uuid;
+                }
+            }
+        }
+        for (Object argument : args) {
+            UUID nested = readRecordComponent(argument, parameterName);
+            if (nested != null) {
+                return nested;
+            }
+        }
+        return null;
+    }
+
+    /** Reads a UUID record component by name, or null if the argument has no such component. */
+    private UUID readRecordComponent(Object argument, String componentName) {
+        if (argument == null || !argument.getClass().isRecord()) {
             return null;
         }
-        for (int i = 0; i < names.length && i < args.length; i++) {
-            if (parameterName.equals(names[i]) && args[i] instanceof UUID uuid) {
-                return uuid;
+        for (RecordComponent component : argument.getClass().getRecordComponents()) {
+            if (!componentName.equals(component.getName()) || component.getType() != UUID.class) {
+                continue;
+            }
+            try {
+                return (UUID) component.getAccessor().invoke(argument);
+            } catch (ReflectiveOperationException ex) {
+                // An accessor that cannot be read is a bug in this code, not a reason to skip an
+                // authorization check. Fall through and let the caller fail closed.
+                log.warn("Could not read '{}' from {}", componentName, argument.getClass().getSimpleName(), ex);
+                return null;
             }
         }
         return null;

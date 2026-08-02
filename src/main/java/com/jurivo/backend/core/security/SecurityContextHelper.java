@@ -2,6 +2,8 @@ package com.jurivo.backend.core.security;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -38,6 +40,22 @@ public final class SecurityContextHelper {
 
     public static Optional<UUID> currentUserId() {
         return currentPrincipal().map(UserPrincipal::userId);
+    }
+
+    /**
+     * The raw access token this request presented.
+     *
+     * <p>Needed only by self-service password change, which Cognito authorises with the user's own
+     * token rather than with admin rights — so an administrator cannot use that path to set
+     * someone else's password. Nothing else should reach for this: passing the caller's
+     * credential onwards is a capability, not a convenience.
+     */
+    public static Optional<String> currentAccessToken() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication instanceof JwtAuthenticationToken jwtAuthentication) {
+            return Optional.ofNullable(jwtAuthentication.getToken()).map(Jwt::getTokenValue);
+        }
+        return Optional.empty();
     }
 
     public static Optional<UUID> currentOrganizationId() {

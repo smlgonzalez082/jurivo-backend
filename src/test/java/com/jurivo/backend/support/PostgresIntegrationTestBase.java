@@ -55,9 +55,25 @@ public abstract class PostgresIntegrationTestBase {
         SecurityContextHolder.clearContext();
     }
 
-    /** Installs a principal for the current thread. Mirrors what the JWT converter produces. */
-    protected void authenticateAs(UUID userId, Set<UUID> organizationIds, Set<String> roles,
+    /**
+     * Installs a principal holding the given SYSTEM roles. Mirrors what the JWT converter
+     * produces for a user with no custom roles.
+     */
+    protected void authenticateAs(UUID userId, Set<UUID> organizationIds, Set<String> systemRoles,
                                   Set<String> permissions) {
+        authenticateAs(userId, organizationIds, systemRoles, Set.of(), permissions);
+    }
+
+    /**
+     * Installs a principal with system and custom roles held separately.
+     *
+     * <p>The split is the security boundary: only {@code systemRoles} satisfies a role check or
+     * grants tenant bypass. A test that wants to prove a custom role cannot escalate passes the
+     * name in {@code customRoles} — passing it in {@code systemRoles} would be testing a
+     * situation the converter cannot produce.
+     */
+    protected void authenticateAs(UUID userId, Set<UUID> organizationIds, Set<String> systemRoles,
+                                  Set<String> customRoles, Set<String> permissions) {
         UserPrincipal principal = new UserPrincipal(
                 userId,
                 "cognito|" + userId,
@@ -65,7 +81,8 @@ public abstract class PostgresIntegrationTestBase {
                 "Test User",
                 organizationIds.stream().findFirst().orElse(null),
                 organizationIds,
-                roles,
+                systemRoles,
+                customRoles,
                 permissions,
                 Set.of());
         SecurityContextHolder.getContext().setAuthentication(

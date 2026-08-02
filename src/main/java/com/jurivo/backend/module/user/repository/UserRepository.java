@@ -25,4 +25,13 @@ public interface UserRepository extends CrudRepository<User, UUID> {
     Optional<User> findByEmailIgnoringCase(@Param("email") String email);
 
     List<User> findByOrganizationId(UUID organizationId);
+
+    /**
+     * Every user the session can see, ordered for display.
+     *
+     * <p>No tenant predicate: Row-Level Security supplies it. Ordering lives here rather than in
+     * the service so the database sorts, and so a caller cannot forget to.
+     */
+    @Query("SELECT * FROM users ORDER BY COALESCE(full_name, email), email")
+    List<User> findAllOrdered();
 }

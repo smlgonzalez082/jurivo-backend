@@ -68,6 +68,17 @@ Roles, permissions, and organization scope are resolved in `CognitoJwtAuthentica
 and frozen into `UserPrincipal`. Nothing downstream re-reads them from the database or
 re-computes them from claims.
 
+### 4. Roles resolve by ID, and system roles are separate
+
+Organizations define their own roles, so **role names are unique only within an organization**.
+Two firms can each have a "Paralegal". Anything resolving permissions keys on the role **ID** —
+a name-keyed query would union unrelated firms' grants.
+
+`UserPrincipal` keeps `systemRoles` apart from `roleNames`, and only `systemRoles` answers
+`hasRole`, `isSuperAdmin`, or `bypassesTenantIsolation`. **A custom role contributes permissions
+and never authority.** Do not add a call site that authorizes on `roleNames` — that is the exact
+escalation the split exists to prevent, and `UserPrincipalRoleSeparationTest` will fail if you do.
+
 ## Auth model
 
 Cognito issues an **access token**; this service validates it. Two Cognito-specific facts drive

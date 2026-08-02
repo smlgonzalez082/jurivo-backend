@@ -43,7 +43,9 @@ public class CurrentUserGraphQlController {
                 principal.email(),
                 principal.fullName(),
                 principal.organizationId(),
-                List.copyOf(principal.roles()),
+                // All role names, system and custom — this is a display surface. Access decisions
+                // read systemRoles, never this. See UserPrincipal's javadoc.
+                List.copyOf(principal.allRoleNames()),
                 List.copyOf(principal.permissions()),
                 organizations
         );

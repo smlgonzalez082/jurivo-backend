@@ -1,5 +1,7 @@
 package com.jurivo.backend.module.rbac.service;
 
+import com.jurivo.backend.module.rbac.model.Permission;
+import com.jurivo.backend.module.rbac.model.Role;
 import com.jurivo.backend.module.rbac.repository.PermissionRepository;
 import com.jurivo.backend.module.rbac.repository.RoleRepository;
 import org.slf4j.Logger;
@@ -13,11 +15,10 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Resolves a set of roles into the permission codes they grant.
+ * Resolves roles into the permission codes they grant.
  *
- * <p>This runs once per authentication, and its output is frozen into the
- * {@link com.jurivo.backend.core.security.UserPrincipal}. Nothing downstream re-resolves
- * permissions — one derivation, one answer.
+ * <p>Runs once per authentication; the output is frozen into the
+ * {@link com.jurivo.backend.core.security.UserPrincipal}. Nothing downstream re-resolves.
  */
 @Service
 public class PermissionService {
@@ -32,27 +33,40 @@ public class PermissionService {
         this.roleRepository = roleRepository;
     }
 
-    /** The role names granted to a user across every scope. */
-    public Set<String> resolveRoleNames(UUID userId) {
-        return new LinkedHashSet<>(roleRepository.findRoleNamesByUserId(userId));
+    /** Every role granted to a user, as entities. */
+    public List<Role> resolveRoles(UUID userId) {
+        return roleRepository.findRolesByUserId(userId);
     }
 
     /**
      * The union of permission codes granted by the given roles.
      *
-     * <p>Returns an empty set for empty input rather than querying — an empty {@code IN ()} is a
-     * SQL syntax error, and a user with no roles legitimately has no permissions.
+     * <p><b>Keyed on role ID.</b> Role names are unique only within an organization since
+     * migration V4, so a name-keyed lookup would union the grants of every identically-named
+     * role across every tenant on the platform — a cross-tenant privilege leak that no test
+     * asserting a single firm's behaviour would ever catch.
+     *
+     * <p>Returns empty for empty input rather than querying: an empty {@code IN ()} is a SQL
+     * syntax error, and a user with no roles legitimately has no permissions.
      */
-    public Set<String> resolvePermissions(Collection<String> roleNames) {
-        if (roleNames == null || roleNames.isEmpty()) {
+    public Set<String> resolvePermissions(Collection<UUID> roleIds) {
+        if (roleIds == null || roleIds.isEmpty()) {
             return Set.of();
         }
-        List<String> codes = permissionRepository.findCodesByRoleNames(roleNames);
+        List<String> codes = permissionRepository.findCodesByRoleIds(roleIds);
         if (codes.isEmpty()) {
-            // Not an error — VIEWER-like roles may grant little — but worth a line, because the
-            // usual cause is a role that was seeded without any role_permissions rows.
-            log.debug("Roles {} resolved to zero permissions", roleNames);
+            // Not an error — a VIEWER-like role may grant little — but worth a line, because the
+            // usual cause is a role created without any grants.
+            log.debug("Roles {} resolved to zero permissions", roleIds);
         }
         return new LinkedHashSet<>(codes);
+    }
+
+    public List<Permission> findAll() {
+        return permissionRepository.findAllOrdered();
+    }
+
+    public List<Permission> findByRole(UUID roleId) {
+        return permissionRepository.findByRoleId(roleId);
     }
 }

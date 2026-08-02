@@ -1,8 +1,10 @@
 package com.jurivo.backend.module.user.service;
 
+import com.jurivo.backend.core.security.AccessDeniedException;
 import com.jurivo.backend.module.organization.model.Organization;
 import com.jurivo.backend.module.organization.repository.OrganizationRepository;
 import com.jurivo.backend.module.user.model.User;
+import com.jurivo.backend.module.user.model.UserStatus;
 import com.jurivo.backend.module.user.model.UserOrganization;
 import com.jurivo.backend.module.user.repository.UserOrganizationRepository;
 import com.jurivo.backend.module.user.repository.UserRepository;
@@ -73,6 +75,7 @@ public class UserService {
         Optional<User> existing = userRepository.findByIdpSub(idpSub);
         if (existing.isPresent()) {
             User user = existing.get();
+            requirePermittedToSignIn(user);
             refreshLoginTimestamp(user);
             return user;
         }
@@ -88,7 +91,8 @@ public class UserService {
         user.setIdpSub(idpSub);
         user.setEmail(email);
         user.setFullName(fullName);
-        user.setStatus("ACTIVE");
+        user.setCognitoUsername(email);
+        user.setStatus(UserStatus.ACTIVE.name());
         Instant now = clock.instant();
         user.setLastLoginAt(now);
         user.setCreatedAt(now);
@@ -98,6 +102,23 @@ public class UserService {
         saved.markNotNew();
         log.info("Provisioned user on first sign-in: userId={} idpSub={}", saved.getId(), idpSub);
         return saved;
+    }
+
+    /**
+     * Refuses a principal to a user who is not ACTIVE.
+     *
+     * <p>This is what makes the Jurivo row — not Cognito — the authority on whether someone may
+     * use the application. It also closes the window in the reactivation path: if a status change
+     * updated Cognito but failed before the database, the identity provider would happily issue a
+     * token, and only this check keeps that token from becoming a session.
+     */
+    private void requirePermittedToSignIn(User user) {
+        UserStatus status = UserStatus.valueOf(user.getStatus());
+        if (!status.permitsSignIn()) {
+            log.info("Refused sign-in for user {} in status {}", user.getId(), status);
+            throw new AccessDeniedException(
+                    "This account is " + status.name().toLowerCase() + " and cannot sign in");
+        }
     }
 
     private void refreshLoginTimestamp(User user) {
