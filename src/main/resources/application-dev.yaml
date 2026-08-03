@@ -17,7 +17,7 @@ app:
     issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_localdev}
     client-ids: ${COGNITO_CLIENT_IDS:local-dev-client}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:7500}
   graphiql:
     enabled: true
 

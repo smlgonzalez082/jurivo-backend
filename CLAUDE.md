@@ -17,7 +17,7 @@ The Jurivo API and the single source of truth for every business decision in the
 | API | GraphQL (primary) + a minimal REST surface |
 | Auth | Amazon Cognito access tokens, validated as an OAuth2 resource server |
 | Build | Gradle (Kotlin DSL) + Jib — **there is no Dockerfile** |
-| Port | 8080 |
+| Port | 7580 |
 
 **Blocking, not reactive.** `spring.threads.virtual.enabled=true` means a request that waits on
 the database parks a virtual thread rather than pinning a platform one. Write ordinary blocking
@@ -89,7 +89,7 @@ the implementation:
   `CognitoAccessTokenValidator` checks `client_id` plus `token_use=access` instead. Rejecting
   `token_use=id` is what stops an ID token being used as an API credential.
 - A Cognito access token carries **no user attributes** by default. jurivo-cdk attaches a
-  pre-token-generation Lambda that adds `email`; `CognitoUserProfileService` is the fallback
+  pre-token-generation Lambda that adds `email`; `CognitoIdentityService` provides the fallback
   when it is absent. Sign-in never fails over a display field.
 
 Cognito owns authentication. Jurivo owns authorization: every role, permission, and organization
@@ -101,7 +101,7 @@ membership comes from this database, never from a token claim.
 ./scripts/start-local.sh          # PostgreSQL + the API; takes a profile arg, defaults to dev
 ```
 
-It frees port 8080 from a previous run — but only if a JVM holds it. Anything else is reported
+It frees port 7580 from a previous run — but only if a JVM holds it. Anything else is reported
 and left alone, because killing an unrelated process on a common port is a nasty surprise.
 
 Or drive it yourself:
@@ -111,7 +111,7 @@ docker compose up -d postgres     # PostgreSQL 16 on :5442
 ./gradlew bootRun
 ```
 
-GraphiQL is at http://localhost:8080/graphiql (dev profile only). The endpoint still requires a
+GraphiQL is at http://localhost:7580/graphiql (dev profile only). The endpoint still requires a
 bearer token — GraphiQL only gives you somewhere to paste one.
 
 ## Pre-push verification

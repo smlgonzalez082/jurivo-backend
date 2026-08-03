@@ -6,7 +6,7 @@
 #   ./scripts/start-local.sh prod     # any other profile
 #
 # What this does beyond `./gradlew bootRun`:
-#   - frees port 8080 if a previous run is still holding it
+#   - frees port 7580 if a previous run is still holding it
 #   - starts PostgreSQL and waits until it genuinely accepts connections
 #   - loads .env.local
 #   - prints the URLs once the application reports healthy
@@ -14,7 +14,7 @@
 set -euo pipefail
 
 PROFILE="${1:-dev}"
-PORT=8080
+PORT=7580
 DB_PORT=5442
 DB_USER=jurivo
 DB_NAME=jurivo_dev

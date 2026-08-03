@@ -125,7 +125,7 @@ jib {
     }
     container {
         jvmFlags = listOf("-Xms256m", "-Xmx1g", "-XX:+UseG1GC")
-        ports = listOf("8080")
+        ports = listOf("7580")
         creationTime.set("USE_CURRENT_TIMESTAMP")
     }
 }
