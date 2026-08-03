@@ -70,6 +70,18 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # TEMPORARY DIAGNOSTIC — remove once OIDC is confirmed working.
+      # Prints the OIDC claims only, never the token itself.
+      - name: Debug OIDC claims
+        run: |
+          TOKEN=$(curl -sSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          P=$(echo "$TOKEN" | cut -d. -f2)
+          PAD=$(( (4 - ${#P} % 4) % 4 ))
+          P="${P}$(printf '=%.0s' $(seq 1 $PAD 2>/dev/null))"
+          echo "$P" | tr '_-' '/+' | base64 -d 2>/dev/null \
+            | jq '{sub, aud, repository, repository_owner, ref, workflow}'
+
       # OIDC rather than long-lived keys: the role is created by jurivo-cdk's GithubOidcStack
       # and trusts only this repository.
       - name: Configure AWS credentials
