@@ -2,6 +2,8 @@ package com.jurivo.backend.core.config;
 
 import com.jurivo.backend.core.security.CognitoAccessTokenValidator;
 import com.jurivo.backend.core.security.CognitoJwtAuthenticationConverter;
+import com.jurivo.backend.core.security.devauth.DevAuthenticationFilter;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +18,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
@@ -54,7 +57,16 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            ObjectProvider<DevAuthenticationFilter> devAuthenticationFilter) throws Exception {
+
+        // Present only under the dev profile with app.dev-auth.enabled=true; see DevAuthConfig.
+        // Installed before the bearer-token filter so a `dev:` token is handled first, while a
+        // real Cognito token still takes the normal path.
+        devAuthenticationFilter.ifAvailable(filter ->
+                http.addFilterBefore(filter, BearerTokenAuthenticationFilter.class));
+
         http
                 .cors(Customizer.withDefaults())
                 // No cookie-based authentication reaches this service — the only credential is a

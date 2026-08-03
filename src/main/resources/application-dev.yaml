@@ -13,6 +13,22 @@ spring:
         enabled: true
 
 app:
+  # LOCAL DEVELOPMENT AUTHENTICATION BYPASS.
+  #
+  # Lets any caller authenticate as an existing user with `Authorization: Bearer dev:<email>`,
+  # and seeds a firm with three users to be. It exists because there is no local Cognito
+  # emulator, so without it nothing behind sign-in can be developed until the cloud environment
+  # is stood up.
+  #
+  # It bypasses ONLY authentication. Roles, permissions, and Row-Level Security all behave
+  # exactly as they do in production, because the principal is built by the same code.
+  #
+  # This key appears in no other profile, the beans it enables are @Profile("dev"), and the
+  # filter refuses to start if it detects a deployed environment. Set it to false to develop
+  # against a real Cognito pool instead.
+  dev-auth:
+    enabled: ${DEV_AUTH_ENABLED:true}
+
   cognito:
     issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_localdev}
     client-ids: ${COGNITO_CLIENT_IDS:local-dev-client}

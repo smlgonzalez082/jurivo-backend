@@ -101,6 +101,32 @@ membership comes from this database, never from a token claim.
 ./scripts/start-local.sh          # PostgreSQL + the API; takes a profile arg, defaults to dev
 ```
 
+### The development authentication bypass
+
+There is no local Cognito emulator, so the dev profile enables one — `app.dev-auth.enabled`. It
+seeds a firm with three users and accepts `Authorization: Bearer dev:<email>`:
+
+```bash
+curl -H 'Authorization: Bearer dev:admin@jurivo.local' -H 'Content-Type: application/json' \
+     -d '{"query":"{ me { email roles permissions } }"}' http://localhost:7580/graphql
+```
+
+| Account | Is |
+|---|---|
+| `admin@jurivo.local` | ORG_ADMIN of the seeded firm |
+| `member@jurivo.local` | MEMBER of the same firm |
+| `nobody@jurivo.local` | no organization, no roles — what an invited user sees |
+
+**It bypasses authentication and nothing else.** The principal is built by `PrincipalFactory`, the
+same code the Cognito converter uses, so roles, permissions, organization scope, and Row-Level
+Security all behave exactly as in production. You cannot reach another tenant's data through it.
+
+Four fences keep it out of anything deployed: `@Profile("dev")`, an explicit property with no
+default, a startup check that refuses to run if it detects AWS environment variables, and
+`DevAuthAbsentInProdIntegrationTest`, which fails the build if the bean appears under `prod`.
+**Do not remove any of them**, and do not extend the filter to create users or grant roles — it
+resolves existing users only.
+
 It frees port 7580 from a previous run — but only if a JVM holds it. Anything else is reported
 and left alone, because killing an unrelated process on a common port is a nasty surprise.
 

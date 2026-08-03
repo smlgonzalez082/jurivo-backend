@@ -54,17 +54,14 @@ public class CognitoJwtAuthenticationConverter implements Converter<Jwt, Abstrac
     private static final String CLAIM_USERNAME = "username";
 
     private final UserService userService;
-    private final PermissionService permissionService;
-    private final CognitoGroupRoleService cognitoGroupRoleService;
+    private final PrincipalFactory principalFactory;
     private final CognitoIdentityService cognitoIdentityService;
 
     public CognitoJwtAuthenticationConverter(UserService userService,
-                                             PermissionService permissionService,
-                                             CognitoGroupRoleService cognitoGroupRoleService,
+                                             PrincipalFactory principalFactory,
                                              CognitoIdentityService cognitoIdentityService) {
         this.userService = userService;
-        this.permissionService = permissionService;
-        this.cognitoGroupRoleService = cognitoGroupRoleService;
+        this.principalFactory = principalFactory;
         this.cognitoIdentityService = cognitoIdentityService;
     }
 
@@ -76,62 +73,11 @@ public class CognitoJwtAuthenticationConverter implements Converter<Jwt, Abstrac
         CognitoIdentityService.Profile profile = resolveProfile(jwt);
         User user = userService.getOrCreateFromIdentity(idpSub, profile.email(), profile.fullName());
 
-        // Roles from two sources, deduplicated by ID rather than by name — since V4 two roles can
-        // legitimately share a name, so a name-keyed set would silently drop one firm's role.
-        Map<UUID, Role> rolesById = new LinkedHashMap<>();
-        for (Role role : permissionService.resolveRoles(user.getId())) {
-            rolesById.put(role.getId(), role);
-        }
-        for (Role role : cognitoGroupRoleService.resolveRoles(cognitoGroups)) {
-            rolesById.put(role.getId(), role);
-        }
+        // Role, permission, and organization resolution lives in PrincipalFactory, shared with
+        // the local-development filter, so the two cannot drift.
+        UserPrincipal principal = principalFactory.build(user, idpSub, cognitoGroups);
 
-        // The split that closes the escalation path: only platform-owned roles can satisfy a role
-        // check or grant tenant bypass. A firm's custom role contributes permissions, never
-        // authority. See UserPrincipal's javadoc and migration V4.
-        Set<String> systemRoles = rolesById.values().stream()
-                .filter(Role::isSystem)
-                .map(Role::getName)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        Set<String> roleNames = rolesById.values().stream()
-                .map(Role::getName)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-
-        Set<String> permissions = permissionService.resolvePermissions(rolesById.keySet());
-
-        // A platform operator carries no organization ids, which is what grants RLS bypass. Every
-        // other principal gets their expanded membership set, even if empty — "sees nothing" is
-        // very different from "sees everything".
-        boolean isPlatformOperator = systemRoles.contains("SUPER_ADMIN");
-        Set<UUID> organizationIds = isPlatformOperator
-                ? Set.of()
-                : userService.resolveAccessibleOrganizationIds(user.getId());
-
-        if (organizationIds.isEmpty() && !isPlatformOperator) {
-            log.info("User {} has no organization membership; all tenant-scoped queries will return empty",
-                    user.getId());
-        }
-
-        UserPrincipal principal = new UserPrincipal(
-                user.getId(),
-                idpSub,
-                user.getEmail(),
-                user.getFullName(),
-                user.getOrganizationId(),
-                organizationIds,
-                systemRoles,
-                roleNames,
-                permissions,
-                cognitoGroups
-        );
-
-        // Granted authorities carry only system roles, for the same reason: Spring's own
-        // hasRole() checks must not be satisfiable by a tenant-created role name.
-        Collection<GrantedAuthority> authorities = systemRoles.stream()
-                .map(role -> (GrantedAuthority) new SimpleGrantedAuthority("ROLE_" + role))
-                .collect(Collectors.toSet());
-
-        return new UserAuthenticationToken(jwt, principal, authorities);
+        return new UserAuthenticationToken(jwt, principal, principalFactory.authoritiesFor(principal));
     }
 
     private Set<String> readGroups(Jwt jwt) {
